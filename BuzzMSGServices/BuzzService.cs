@@ -50,7 +50,7 @@ namespace BuzzMSGServices
         public Buzz GetBuzz(int fromUserID, string buzzID, Boolean markAsSent)
         {
 
-            var q = _buzzRepository.Query(b => b.FromUserID == fromUserID && b.BuzzIdentity == buzzID);
+            var q = _buzzRepository.Query(b => buzzID != null && (b.FromUserID == fromUserID && b.BuzzIdentity == buzzID));
             var select = q.Select();
             var result = select.SingleOrDefault();
             if (result == null)
@@ -132,19 +132,29 @@ namespace BuzzMSGServices
         }
         public Boolean IsUserNameTaken(string usrname)
         {
-            var user = _userRepository.Query(u => u.UserName.Equals(usrname, StringComparison.OrdinalIgnoreCase)).Select();
-            return user != null;
+            var q = _userRepository.Query(u => u.UserName.Equals(usrname, StringComparison.OrdinalIgnoreCase));
+            if (q != null)
+            {
+                var user = q.Select();
+                return user != null;
+            }
+
+            return false;
+
         }
         public IEnumerable<string> GetUserNameSuggestions(string username)
         {
             var result = new List<string>();
-            var users = _userRepository.Query(u => u.UserName.Equals(username, StringComparison.OrdinalIgnoreCase)).Select();
-            var count = 3;
-            var userCount = users.Count();
-            var rand = new Random(userCount);
-            if (userCount > 0)
+            var q = _userRepository.Query(u => u.UserName.Equals(username, StringComparison.OrdinalIgnoreCase));
+            if (q != null)
             {
-                while (count > 0)
+                var users = q.Select();
+                var count = 3;
+                var limit = 50;
+                var userCount = users.Count();
+                var rand = new Random(userCount);
+                if (userCount <= 0) return result;
+                while (count > 0 && limit > 0)
                 {
                     var newName = string.Format("{0} {1}", username, rand.Next(userCount + 1, userCount + 100));
                     if (!IsUserNameTaken(newName))
@@ -152,8 +162,10 @@ namespace BuzzMSGServices
                         result.Add(newName);
                         count--;
                     }
+                    limit--;
                 }
             }
+            
             return result;
         }
 
@@ -237,33 +249,31 @@ namespace BuzzMSGServices
         }
         public ContactsPageResult GetBuzzUserContacts(int id, int count, int start)
         {
-            var user = _userRepository.Query(u => u.DataBaseID == id).Include(u => u.Contacts).Select().FirstOrDefault();
+           
             var result = new List<BuzzUser>();
             bool isMore = false;
-            if (user != null)
+            var q = _userRepository.Query(u => u.DataBaseID == id).Include(u => u.Contacts);
+            if (q != null)
             {
-                if (user.Contacts != null)
+                var user = q.Select().FirstOrDefault();
+                if (user != null)
                 {
-                    var idList = user.Contacts.Skip(start).Take(count);
-                    if (idList.Any())
+                    if (user.Contacts != null)
                     {
-                        foreach (BuzzUser ui in idList)
+                        var idList = user.Contacts.Skip(start).Take(count);
+                        if (idList.Any())
                         {
-                            var bu = _userRepository.Find(ui);
-                            if (bu != null)
+                            result.AddRange(from ui in idList let bu = _userRepository.Find(ui) where bu != null select _userRepository.Find(ui));
+                            if (user.Contacts.Count() > (start + result.Count()))
                             {
-                                result.Add(_userRepository.Find(ui));
+                                isMore = true;
                             }
-
-                        }
-                        if (user.Contacts.Count() > (start + result.Count()))
-                        {
-                            isMore = true;
                         }
                     }
-
                 }
             }
+           
+           
             return new ContactsPageResult() { contacts = result, hasMore = isMore };
         }
         public BuzzUser GetBuzzSender(string buzzIdentity)
@@ -283,23 +293,34 @@ namespace BuzzMSGServices
 
         public List<BuzzUser> GetSentContactRequests(int fromID, int count = 0, int start = 0)
         {
-            var user = _userRepository.Query(u => u.DataBaseID == fromID).Include(u => u.SentContactRequests).Select().FirstOrDefault();
             var result = new List<BuzzUser>();
-            if (user != null)
-            {
-                if (user.SentContactRequests != null)
-                {
-                    result = user.SentContactRequests.Skip(start).Take(count).ToList();
-                   
-                }
+            var q = _userRepository.Query(u => u.DataBaseID == fromID);
+            q.Include(u => u.SentContactRequests);
 
+            if (q != null)
+            {
+                var user = q.Select().FirstOrDefault();
+                if (user != null)
+                {
+                    if (user.SentContactRequests != null)
+                    {
+                        result = user.SentContactRequests.Skip(start).Take(count).ToList();
+
+                    }
+
+                }
             }
+            
+           
             return result;
         }
         public List<BuzzUser> GetContactRequests(int toID, int count = 10, int start = 0)
         {
-            var user = _userRepository.Query(u => u.DataBaseID == toID).Include(u => u.ReceivedContactRequests).Select().FirstOrDefault();
             var result = new List<BuzzUser>();
+            var q = _userRepository.Query(u => u.DataBaseID == toID);
+            q.Include(u => u.ReceivedContactRequests);
+            var user = q.Select().FirstOrDefault();
+            
             if (user != null)
             {
                 if (user.ReceivedContactRequests != null)
@@ -318,8 +339,11 @@ namespace BuzzMSGServices
         }
         public List<BuzzUser> GetContacts(int dbID, int count = 10, int start = 0)
         {
-            var me = _userRepository.Query(u => u.DataBaseID == dbID).Include(u => u.Contacts).Select().FirstOrDefault();
             var result = new List<BuzzUser>();
+            var q = _userRepository.Query(u => u.DataBaseID == dbID);
+            q.Include(u => u.Contacts);
+            var me = q.Select().FirstOrDefault();
+           
             if (me != null)
             {
                 if (me.Contacts != null)
@@ -334,10 +358,16 @@ namespace BuzzMSGServices
 
         public void AddBuzzRequest(int fromID, int toID)
         {
-            var from = _userRepository.Query(u => u.DataBaseID == fromID).Include(u => u.SentContactRequests).Include(u => u.Contacts).Select().FirstOrDefault();
+            var qf = _userRepository.Query(u => u.DataBaseID == fromID);
+            qf.Include(u => u.SentContactRequests);
+            qf.Include(u => u.Contacts);
+            var from = qf.Select().FirstOrDefault();
             if (from != null)
             {
-                var to = _userRepository.Query(u => u.DataBaseID == toID).Include(u => u.ReceivedContactRequests).Include(u => u.Contacts).Select().FirstOrDefault();
+                var qt = _userRepository.Query(u => u.DataBaseID == toID);
+                qt.Include(u => u.ReceivedContactRequests);
+                qt.Include(u => u.Contacts);
+                var to = qt.Select().FirstOrDefault();
 
                 if (to != null)
                 {
@@ -365,12 +395,14 @@ namespace BuzzMSGServices
         }
         public void RemoveBuzzRequest(int fromID, int toID)
         {
-            var to = _userRepository.Query(u => u.DataBaseID == toID).Include(b => b.ReceivedContactRequests).Select().FirstOrDefault();
+            var q = _userRepository.Query(u => u.DataBaseID == toID);
+            q.Include(b => b.ReceivedContactRequests);
+            var to = q.Select().FirstOrDefault();
             if (to != null)
             {
                 if (to.ReceivedContactRequests != null)
                 {
-                    var from = to.ReceivedContactRequests.SingleOrDefault(u => u.DataBaseID == toID);
+                    var from = to.ReceivedContactRequests.FirstOrDefault(u => u.DataBaseID == toID);
                     if (from != null)
                     {
                         to.ReceivedContactRequests.Remove(from);
@@ -397,10 +429,17 @@ namespace BuzzMSGServices
         }
         public void AddUserToContacts(int userToAddID, int userAddingToID)
         {
-            var userToAdd = _userRepository.Query(u => u.DataBaseID == userToAddID).Include(u => u.Contacts).Select().FirstOrDefault();
+            var q1 = _userRepository.Query(u => u.DataBaseID == userToAddID);
+            q1.Include(u => u.Contacts);
+
+            var userToAdd = q1.Select().FirstOrDefault();
+
             if (userToAdd != null)
             {
-                var userAddingTo = _userRepository.Query(u => u.DataBaseID == userAddingToID).Include(u => u.Contacts).Select().FirstOrDefault();
+                var q2 = _userRepository.Query(u => u.DataBaseID == userAddingToID);
+                q2.Include(u => u.Contacts);
+
+                var userAddingTo = q2.Select().FirstOrDefault();
                 if (userAddingTo != null)
                 {
                     if (userAddingTo.Contacts == null)
@@ -421,23 +460,27 @@ namespace BuzzMSGServices
         }
         public void RemoveUserFromContacts(int userToRemoveID, int userRemovingFromID)
         {
-            var toRem = _userRepository.Query(u => u.DataBaseID == userToRemoveID).Include(u => u.Contacts).Select().FirstOrDefault();
+            var q1 = _userRepository.Query(u => u.DataBaseID == userToRemoveID);
+            q1.Include(u => u.Contacts);
+            var toRem = q1.Select().FirstOrDefault();
             if (toRem != null)
             {
-                var remFrom = _userRepository.Query(u => u.DataBaseID == userRemovingFromID).Include(u => u.Contacts).Select().FirstOrDefault();
+                var q2 = _userRepository.Query(u => u.DataBaseID == userRemovingFromID);
+                q2.Include(u => u.Contacts);
+                var remFrom = q2.Select().FirstOrDefault();
 
                 if (remFrom != null)
                 {
                     if (toRem.Contacts != null)
                     {
-                        BuzzUser fid = toRem.Contacts.SingleOrDefault(c => c.DataBaseID == remFrom.DataBaseID);
+                        BuzzUser fid = toRem.Contacts.FirstOrDefault(c => c.DataBaseID == remFrom.DataBaseID);
                         if (fid != null)
                         {
                             toRem.Contacts.Remove(fid);
 
                             if (remFrom.Contacts != null)
                             {
-                                BuzzUser tid = remFrom.Contacts.SingleOrDefault(c => c.DataBaseID == toRem.DataBaseID);
+                                BuzzUser tid = remFrom.Contacts.FirstOrDefault(c => c.DataBaseID == toRem.DataBaseID);
                                 if (tid != null)
                                 {
                                     remFrom.Contacts.Remove(tid);

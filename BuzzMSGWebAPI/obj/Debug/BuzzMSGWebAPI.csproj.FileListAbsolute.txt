@@ -136,3 +136,5 @@ C:\Users\BricklyfeA\Documents\Visual Studio 2013\Projects\BuzzMSGWebAPI2\BuzzMSG
 C:\Users\BricklyfeA\Documents\Visual Studio 2013\Projects\BuzzMSGWebAPI2\BuzzMSGWebAPI\obj\Debug\BuzzMSGWebAPI.dll
 C:\Users\BricklyfeA\Documents\Visual Studio 2013\Projects\BuzzMSGWebAPI2\BuzzMSGWebAPI\obj\Debug\BuzzMSGWebAPI.pdb
 C:\Users\BricklyfeA\Documents\Visual Studio 2013\Projects\BuzzMSGWebAPI2\BuzzMSGWebAPI\bin\Microsoft.Practices.ServiceLocation.dll
+C:\Users\BricklyfeA\Documents\Visual Studio 2013\Projects\BuzzMSGWebAPI2\BuzzMSGWebAPI\bin\Microsoft.Practices.Unity.RegistrationByConvention.dll
+C:\Users\BricklyfeA\Documents\Visual Studio 2013\Projects\BuzzMSGWebAPI2\BuzzMSGWebAPI\bin\Microsoft.Practices.Unity.RegistrationByConvention.xml
